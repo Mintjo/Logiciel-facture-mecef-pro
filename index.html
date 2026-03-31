@@ -642,28 +642,35 @@ async function exportPDF() {
   btn.disabled = true;
   btn.textContent = '⏳ Génération en cours...';
   try {
+    if (typeof html2canvas === 'undefined') throw new Error('html2canvas non chargé');
+    if (typeof jspdf === 'undefined' || typeof jspdf.jsPDF === 'undefined') throw new Error('jsPDF non chargé');
+
     const el = document.getElementById('facture-preview');
-    // Récupérer le nom de la facture en filtrant tout caractère invalide pour un nom de fichier
     const safeName = (facture && facture.numero) ? facture.numero.replace(/[^a-zA-Z0-9_\-]/g, '_') : 'export';
-    
-    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+
+    const canvas = await html2canvas(el, {
+      scale: 2,
+      allowTaint: true,
+      useCORS: false,
+      backgroundColor: '#ffffff',
+      logging: false
+    });
     const imgData = canvas.toDataURL('image/png', 1.0);
-    
-    // Calcul de la hauteur dynamique pour ne pas couper le footer
-    const w = 210; // Largeur A4 en mm
+
+    const w = 210;
     const h = (canvas.height * w) / canvas.width;
-    const finalH = Math.max(297, h); // Au moins A4 (297mm) ou plus si le contenu est long
+    const finalH = Math.max(297, h);
 
     const pdf = new jspdf.jsPDF({ orientation: 'portrait', unit: 'mm', format: [w, finalH] });
     pdf.addImage(imgData, 'PNG', 0, 0, w, h);
-    
+
     const fileName = 'Facture_Pro_' + safeName + '.pdf';
     pdf.save(fileName);
-    
+
     showToast('✅ PDF exporté avec succès !');
   } catch (err) {
-    console.error('Export error:', err);
-    showToast('❌ Erreur lors de l\'export PDF');
+    console.error('Export error:', err.message || err);
+    showToast('❌ Erreur : ' + (err.message || 'export PDF échoué'));
   }
   btn.disabled = false;
   btn.textContent = '⬇ Télécharger PDF';
