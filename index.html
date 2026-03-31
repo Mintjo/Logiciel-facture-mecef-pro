@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Convertisseur Facture MECeF → Pro</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="node_modules/jspdf/dist/jspdf.umd.min.js"></script>
+<script src="node_modules/html2canvas/dist/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg-panel:#0f172a;--bg-input:#1e293b;--border:#334155;--text-light:#e2e8f0;--accent:#0284c7;--font-ui:Arial,Helvetica,sans-serif;--font-title:Arial,Helvetica,sans-serif;--font-body:Arial,Helvetica,sans-serif;--font-mono:'Courier New',monospace;--radius:6px}
+html,body{height:100%;font-family:var(--font-ui);background:#0f172a}
+.app{display:flex;height:100vh;overflow:hidden}
+.panel-left{width:35%;min-width:320px;background:var(--bg-panel);color:var(--text-light);overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:20px}
+.panel-right{width:65%;background:#f1f5f9;overflow-y:auto;padding:32px;display:flex;justify-content:center}
+.panel-left h2{font-size:14px;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);margin-bottom:8px;font-weight:700}
+.panel-left label{display:block;font-size:12px;color:#94a3b8;margin-bottom:4px;font-weight:500}
+.panel-left input[type="text"],.panel-left input[type="email"],.panel-left input[type="url"],.panel-left input[type="tel"],.panel-left textarea{width:100%;background:var(--bg-input);border:1px solid var(--border);color:var(--text-light);padding:10px 12px;border-radius:var(--radius);font-family:var(--font-ui);font-size:13px;font-weight:400;transition:border-color .2s,box-shadow .2s;outline:none}
+.panel-left input:focus,.panel-left textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(2,132,199,.2)}
+.panel-left textarea{resize:vertical;min-height:60px}
+.field{margin-bottom:10px}
+.section{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:16px}
+.drop-zone{border:2px dashed var(--border);border-radius:10px;padding:32px 16px;text-align:center;cursor:pointer;transition:all .25s;position:relative}
+.drop-zone:hover,.drop-zone.dragover{border-color:var(--accent);background:rgba(2,132,199,.08)}
+.drop-zone svg{width:40px;height:40px;margin:0 auto 8px;display:block;opacity:.5}
+.drop-zone p{font-size:13px;color:#64748b}
+.drop-zone input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.file-status{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;padding:8px 12px;border-radius:var(--radius);background:var(--bg-input)}
+.file-status.success{border-left:3px solid #22c55e}
+.file-status.error{border-left:3px solid #ef4444}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 20px;border:none;border-radius:var(--radius);font-family:var(--font-ui);font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;width:100%}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#0369a1;transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-secondary{background:transparent;color:var(--accent);border:1.5px solid var(--accent)}
+.btn-secondary:hover{background:rgba(2,132,199,.1)}
+.btn-secondary:disabled{opacity:.4;cursor:not-allowed}
+.btn-reset{background:transparent;color:#ef4444;border:1px solid #ef4444;font-size:12px;padding:8px 14px}
+.btn-reset:hover{background:rgba(239,68,68,.1)}
+.btn-save{background:#22c55e;color:#fff;margin-top:6px}
+.btn-save:hover{background:#16a34a}
+.actions{display:flex;flex-direction:column;gap:10px}
+.logo-preview{max-height:60px;margin-top:6px;border-radius:var(--radius);border:1px solid var(--border)}
+
+/* FACTURE PREVIEW */
+#facture-preview{width:210mm;min-height:297mm;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.12);padding:15mm;font-family:var(--font-body);font-size:11px;font-weight:400;color:#1e293b;line-height:1.5;position:relative;display:flex;flex-direction:column}
+#facture-preview .fv-header{display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:12px;border-bottom:2px solid var(--accent);margin-bottom:14px}
+#facture-preview .fv-header .logo-side{display:flex;align-items:center;gap:14px}
+#facture-preview .fv-header .logo-side img{max-height:80px;object-fit:contain}
+#facture-preview .fv-header .company-name{font-family:var(--font-title);font-size:16px;font-weight:700;color:#0f172a}
+#facture-preview .fv-header .company-slogan{font-style:italic;font-size:11px;font-weight:400;color:#64748b}
+#facture-preview .fv-header .legal-info{text-align:right;font-size:10px;color:#64748b}
+#facture-preview .fv-title{text-align:center;font-family:var(--font-title);font-size:13px;font-weight:700;color:#0f172a;padding:10px 0;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.08em}
+#facture-preview .fv-meta{display:flex;justify-content:space-between;font-size:11px;margin-bottom:14px;color:#475569}
+#facture-preview .fv-parties{display:flex;gap:20px;margin-bottom:16px}
+#facture-preview .fv-parties>div{flex:1;padding:10px 14px;border:1px solid #e2e8f0;border-radius:6px;font-size:10.5px}
+#facture-preview .fv-parties h3{font-family:var(--font-title);font-size:11px;font-weight:600;color:#0f172a;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0;padding-bottom:4px}
+#facture-preview table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:11px}
+#facture-preview table th{background:#f8fafc;font-family:var(--font-title);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;padding:8px 6px;border:1px solid #e2e8f0;color:#334155;text-align:left}
+#facture-preview table td{padding:6px;border:1px solid #e2e8f0;font-size:11px;font-weight:400}
+#facture-preview table td.num{text-align:right;font-variant-numeric:tabular-nums}
+#facture-preview .fv-total{text-align:right;font-family:var(--font-title);font-size:14px;font-weight:700;color:#0f172a;padding:10px 0;border-top:2px solid var(--accent);margin-bottom:14px}
+#facture-preview .fv-section-title{font-family:var(--font-title);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin-bottom:6px}
+#facture-preview .fv-arrete{font-style:italic;padding:10px 0;border-top:1px solid #e2e8f0;margin-bottom:14px;font-size:11px}
+
+/* AIB NOTE — fond #fff8e7, bordure gauche accent */
+#facture-preview .fv-aib{font-size:10px;padding:10px 14px;background:#fff8e7;border-left:3px solid #0284c7;border-radius:0 6px 6px 0;margin-bottom:14px;line-height:1.6}
+
+
+
+/* BLOC SÉCURITÉ MECEF — fond #eef2ff, bordure #c7d2fe */
+#facture-preview .fv-mecef{background:#eef2ff;border:2px solid #c7d2fe;border-radius:8px;padding:16px;margin-bottom:14px;page-break-inside:avoid}
+#facture-preview .fv-mecef .mecef-title{font-family:var(--font-title);font-size:10px;font-weight:600;text-align:center;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;color:#3730a3}
+#facture-preview .fv-mecef .mecef-body{display:flex;align-items:flex-start;gap:16px}
+#facture-preview .fv-mecef .mecef-qr{display:flex;flex-direction:column;align-items:center;gap:4px}
+#facture-preview .fv-mecef .mecef-qr-label{font-size:8px;font-style:italic;color:#6b7280}
+#facture-preview .fv-mecef .mecef-info{font-family:'Courier New',monospace;font-size:10px;font-weight:600;color:#334155;line-height:1.8;letter-spacing:0.05em}
+#facture-preview .fv-mecef .mecef-info .mecef-code-value{font-weight:600;color:#1e1b4b;letter-spacing:0.05em}
+#facture-preview .fv-mecef .mecef-info strong{color:#1e1b4b}
+
+
+#facture-preview .fv-footer{text-align:center;font-size:10px;font-weight:400;color:#94a3b8;padding-top:10px;border-top:1px solid #e2e8f0;margin-top:auto}
+
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#94a3b8;text-align:center;gap:12px;font-family:var(--font-ui)}
+.empty-state svg{width:64px;height:64px;opacity:.3}
+.empty-state p{font-size:14px}
+
+@media print{
+  .panel-left{display:none!important}
+  .panel-right{width:100%!important;padding:0!important;overflow:visible!important}
+  #facture-preview{box-shadow:none!important;margin:0!important}
+  #facture-preview .fv-mecef{page-break-inside:avoid!important}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="panel-left">
+  <div style="text-align:center;margin-bottom:4px">
+    <span style="font-size:20px;font-weight:700;color:#0284c7">⚡</span>
+    <span style="font-size:15px;font-weight:700;color:#e2e8f0;margin-left:4px">Facture MECeF → Pro</span>
+  </div>
+  <div class="section">
+    <h2>📄 Upload Facture PDF</h2>
+    <div class="drop-zone" id="dropZone">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#64748b" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0L8 8m4-4l4 4M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg>
+      <p>Glissez votre PDF ici ou <strong style="color:#0284c7">cliquez pour parcourir</strong></p>
+      <input type="file" accept=".pdf" id="pdfInput">
+    </div>
+    <div id="fileStatus" style="display:none"></div>
+    <button class="btn btn-reset" id="btnReset" style="display:none;margin-top:8px" onclick="resetFacture()">🔄 Réinitialiser</button>
+  </div>
+  <div class="section">
+    <h2>🏢 Infos Entreprise</h2>
+    <div class="field"><label>Logo</label><input type="file" accept="image/*" id="logoInput" style="font-size:12px;padding:6px"><img id="logoPreview" class="logo-preview" style="display:none"></div>
+    <div class="field"><label>Nom de l'entreprise *</label><input type="text" id="e_nom" placeholder="Mystic Digital Solutions"></div>
+    <div class="field"><label>Slogan</label><input type="text" id="e_slogan" placeholder="L'innovation au service de votre succès"></div>
+    <div style="display:flex;gap:10px"><div class="field" style="flex:1"><label>RC</label><input type="text" id="e_rc" placeholder="RB/ABC/12-A-1234"></div><div class="field" style="flex:1"><label>IFU</label><input type="text" id="e_ifu" placeholder="1234567890123"></div></div>
+    <div class="field"><label>Adresse</label><textarea id="e_adresse" placeholder="Lot 123, Quartier..."></textarea></div>
+    <div style="display:flex;gap:10px"><div class="field" style="flex:1"><label>Téléphone 1 *</label><input type="tel" id="e_tel1" placeholder="+229 XX XX XX XX"></div><div class="field" style="flex:1"><label>Téléphone 2</label><input type="tel" id="e_tel2" placeholder="+229 XX XX XX XX"></div></div>
+    <div style="display:flex;gap:10px"><div class="field" style="flex:1"><label>Email</label><input type="email" id="e_email" placeholder="contact@example.com"></div><div class="field" style="flex:1"><label>Site web</label><input type="url" id="e_site" placeholder="https://example.com"></div></div>
+
+    <button class="btn btn-save" onclick="saveEntreprise()">💾 Sauvegarder</button>
+  </div>
+  <div class="section actions">
+    <h2>🚀 Actions</h2>
+    <button class="btn btn-primary" id="btnExport" disabled onclick="exportPDF()">⬇ Télécharger PDF</button>
+    <button class="btn btn-secondary" id="btnPrint" disabled onclick="window.print()">🖨 Imprimer</button>
+  </div>
+</div>
+<div class="panel-right">
+  <div id="facture-preview">
+    <div class="empty-state" id="emptyState">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      <p>Uploadez une facture MECeF pour<br>générer l'aperçu professionnel</p>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+/* ===== CONFIG ===== */
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let facture = null;
+let entreprise = { nom:'', slogan:'', rc:'', ifu:'', adresse:'', tel1:'', tel2:'', email:'', site:'', logo:'' };
+const eFields = ['nom','slogan','rc','ifu','adresse','tel1','tel2','email','site'];
+
+/* ===== HELPERS ===== */
+function parseNum(s) {
+  let v = String(s).replace(/\s/g, '');
+  // Si multiple points → séparateurs de milliers (3.587.622 = 3587622)
+  if ((v.match(/\./g) || []).length > 1) v = v.replace(/\./g, '');
+  // Si un seul point suivi de 3 chiffres et fin → séparateur de milliers (3.587 → jamais un décimal dans ce contexte)
+  else if (/^\d+\.\d{3}$/.test(v)) v = v.replace('.', '');
+  // Sinon le point est décimal
+  v = v.replace(/,/g, '.');
+  return parseFloat(v) || 0;
+}
+function fmt(n) { return n ? n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' XOF' : '0 XOF'; }
+function fmtShort(n) { return n ? n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '0'; }
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+/* ===== TOAST ===== */
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  Object.assign(t.style, {
+    position:'fixed', bottom:'20px', left:'50%', transform:'translateX(-50%)',
+    background:'#22c55e', color:'#fff', padding:'10px 24px', borderRadius:'8px',
+    fontFamily:"'DM Sans',sans-serif", fontSize:'14px', fontWeight:'700', zIndex:'9999',
+    boxShadow:'0 4px 12px rgba(0,0,0,.2)', transition:'opacity .3s'
+  });
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+/* ===== ENTREPRISE — localStorage ===== */
+function loadEntreprise() {
+  try {
+    const d = JSON.parse(localStorage.getItem('mds_entreprise'));
+    if (d) {
+      entreprise = { ...entreprise, ...d };
+      eFields.forEach(f => {
+        const el = document.getElementById('e_' + f);
+        if (el) el.value = entreprise[f] || '';
+      });
+      if (entreprise.logo) {
+        document.getElementById('logoPreview').src = entreprise.logo;
+        document.getElementById('logoPreview').style.display = 'block';
+      }
+    }
+  } catch (e) { console.error('Erreur chargement localStorage', e); }
+}
+
+function saveEntreprise() {
+  eFields.forEach(f => { entreprise[f] = document.getElementById('e_' + f).value; });
+  localStorage.setItem('mds_entreprise', JSON.stringify(entreprise));
+  showToast('✅ Infos entreprise sauvegardées !');
+  renderFacture();
+}
+
+/* Logo upload */
+document.getElementById('logoInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    entreprise.logo = ev.target.result;
+    document.getElementById('logoPreview').src = ev.target.result;
+    document.getElementById('logoPreview').style.display = 'block';
+    renderFacture();
+  };
+  reader.readAsDataURL(file);
+});
+
+/* Live re-render on each field change */
+eFields.forEach(f => {
+  const el = document.getElementById('e_' + f);
+  if (el) el.addEventListener('input', () => { entreprise[f] = el.value; renderFacture(); });
+});
+
+/* ===== DROP ZONE ===== */
+const dropZone = document.getElementById('dropZone');
+const pdfInput = document.getElementById('pdfInput');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) handlePDF(e.dataTransfer.files[0]);
+});
+pdfInput.addEventListener('change', e => { if (e.target.files[0]) handlePDF(e.target.files[0]); });
+
+/* ===== PDF HANDLER ===== */
+async function handlePDF(file) {
+  const status = document.getElementById('fileStatus');
+  status.style.display = 'flex';
+  try {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const tc = await page.getTextContent();
+      const lines = [];
+      let lastY = null;
+      tc.items.forEach(item => {
+        if (lastY !== null && Math.abs(item.transform[5] - lastY) > 2) lines.push('\n');
+        lines.push(item.str);
+        lastY = item.transform[5];
+      });
+      fullText += lines.join(' ') + '\n';
+    }
+    console.log('=== TEXTE BRUT EXTRAIT ===\n', fullText);
+    parseMECeF(fullText);
+
+    /* --- EXTRACTION IMAGE BLOC MECeF --- */
+    try {
+      const lastPage = await pdf.getPage(pdf.numPages);
+      const scale = 3;
+      const viewport = lastPage.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await lastPage.render({ canvasContext: ctx, viewport }).promise;
+
+      // Méthode A : détecter position Y via texte PDF.js
+      let yCapture = null;
+      const tcLast = await lastPage.getTextContent();
+      for (const item of tcLast.items) {
+        const txt = item.str.toUpperCase();
+        if (txt.includes('SÉCURITÉ') || txt.includes('SECURITE') || txt.includes('ÉLÉMENTS DE') || txt.includes('ELEMENTS DE') || /[A-Z0-9]{4}-[A-Z0-9]{4}/.test(txt) || (txt.includes('MECEF') && txt.includes('DGI'))) {
+          // PDF Y coordinate (bottom-up) → canvas Y (top-down)
+          const pdfY = item.transform[5];
+          yCapture = viewport.height - (pdfY * scale) - 20;
+          console.log('✅ MECeF bloc détecté via texte à Y:', yCapture);
+          break;
+        }
+      }
+
+      // Méthode B : fallback — prendre les 22% inférieurs
+      if (yCapture === null || yCapture < 0 || yCapture >= viewport.height) {
+        yCapture = Math.floor(viewport.height * 0.78);
+        console.log('⚠️ Fallback MECeF: 22% inférieurs, Y:', yCapture);
+      }
+
+      // Découpe et export
+      const cropH = viewport.height - yCapture;
+      if (cropH > 20) {
+        const cropCanvas = document.createElement('canvas');
+        cropCanvas.width = canvas.width;
+        cropCanvas.height = cropH;
+        const cropCtx = cropCanvas.getContext('2d');
+        cropCtx.drawImage(canvas, 0, yCapture, canvas.width, cropH, 0, 0, canvas.width, cropH);
+        facture.mecefCapture = cropCanvas.toDataURL('image/png');
+        console.log('✅ Image MECeF extraite (' + canvas.width + 'x' + cropH + ')');
+      } else {
+        console.warn('⚠️ Zone MECeF trop petite, capture ignorée');
+      }
+    } catch (mecefErr) {
+      console.error('⚠️ Extraction image MECeF échouée:', mecefErr);
+    }
+
+    // Message si détection échouée
+    let mecefWarning = '';
+    if (!facture.mecefCapture) {
+      mecefWarning = '<div style="margin-top:8px;font-size:12px;color:#f59e0b;background:rgba(245,158,11,.1);padding:6px 10px;border-radius:6px">⚠️ Bloc MECeF non détecté automatiquement — vérifiez que le PDF contient bien les éléments de sécurité</div>';
+    }
+
+    status.className = 'file-status success';
+    status.innerHTML = '✅ <strong>' + esc(file.name) + '</strong> — Données extraites' + mecefWarning;
+    document.getElementById('btnReset').style.display = 'block';
+    document.getElementById('btnExport').disabled = false;
+    document.getElementById('btnPrint').disabled = false;
+    renderFacture();
+  } catch (err) {
+    console.error('Erreur parsing PDF:', err);
+    status.className = 'file-status error';
+    status.innerHTML = '❌ <strong>' + esc(file.name) + '</strong> — Erreur de parsing';
+    facture = null;
+  }
+}
+
+/* ===== PARSER MECeF — Formats SFE + EJROSEY ===== */
+function parseMECeF(txt) {
+  // Normaliser : collapser les espaces entre caractères isolés (ex: "I F U : 0 2 0 1" → "IFU : 0201")
+  const t = txt.replace(/\r/g, '');
+
+  facture = {
+    numero: '', date: '', vendeur: '',
+    client: { nom: '', ifu: '', adresse: '', contact: '' },
+    articles: [],
+    totalTTC: 0,
+    paiements: [],
+    arreteEnLettres: '',
+    aib: null,
+    mecef: { code: '', nim: '', compteurs: '', heure: '' },
+    mecefCapture: null
+  };
+
+  let m;
+
+  // === NUMÉRO FACTURE ===
+  // Capte "EM014119715" ainsi que les suffixes optionnels " - 5" ou "-5"
+  m = t.match(/Facture\s*(?:#|N°|No)?\s*:?\s*([A-Z0-9\-\_]+(?:\s*-\s*\d+)?)/i);
+  if (m) facture.numero = m[1].trim();
+  if (!facture.numero) {
+    m = t.match(/Num(?:éro)?\s*(?:de\s*)?Facture\s*:?\s*([A-Z0-9\-\_]+(?:\s*-\s*\d+)?)/i);
+    if (m) facture.numero = m[1].trim();
+  }
+  // Fallback final : on cherche "EM" + chiffres juste après "Facture"
+  if (!facture.numero) {
+    m = t.match(/Facture\s+(EM\d+(?:\s*-\s*\d+)?)/i);
+    if (m) facture.numero = m[1].trim();
+  }
+
+  // === DATE ===
+  m = t.match(/Date\s*:\s*(\d{2}\/\d{2}\/\d{4})/i);
+  if (m) facture.date = m[1].trim();
+
+  // === VENDEUR ===
+  m = t.match(/Vendeur\s*:\s*([^\n]+)/i);
+  if (m) facture.vendeur = m[1].trim();
+
+  // === CLIENT — bloc complet ===
+  const clientBlock = t.match(/CLIENT[\s\S]*?(?=VENTILATION|IMPÔT|$)/i);
+  if (clientBlock) {
+    const cs = clientBlock[0];
+    // Nom client — peut être sur plusieurs lignes après "Nom"
+    m = cs.match(/Nom\s+([^\n]+(?:\n[A-Z][^\n]*)?)/i);
+    if (m) facture.client.nom = m[1].replace(/\n/g, ' ').trim();
+    // IFU client
+    m = cs.match(/IFU\s+(\d[\d\s]*\d)/i);
+    if (m) facture.client.ifu = m[1].replace(/\s/g, '').trim();
+    // Adresse client
+    m = cs.match(/Adresse\s+([^\n]+)/i);
+    if (m) facture.client.adresse = m[1].trim();
+    // Contact client
+    m = cs.match(/Contact\s*([^\n]*)/i);
+    if (m) facture.client.contact = m[1].trim();
+  }
+
+  // Fallback client nom
+  if (!facture.client.nom) {
+    m = t.match(/Client\s*:\s*([^\n]+)/i);
+    if (m) facture.client.nom = m[1].trim();
+  }
+
+  // === ARTICLES ===
+  // Format SFE: "1 Transport de coton graine 3.587.622 1 3.587.622 [E]"
+  // Format: "# Nom PrixUnit Qté MontantTTC [Groupe]"
+  const artBlock = t.match(/(?:#\s*Nom|Désignation|Description|Montant\s*T\.?T\.?C\.?)[\s\S]*?(?=RÉPARTITION|REPARTITION|PAIEMENT|Arrêt|VENTILATION|$)/i);
+  if (artBlock) {
+    const lines = artBlock[0].split('\n').filter(l => l.trim());
+    for (let i = 1; i < lines.length; i++) {
+      const l = lines[i].trim();
+      // Ignorer les en-têtes
+      if (/^#\s*Nom|Désignation|Description|^Type\s|^Payé|RÉPARTITION|REPARTITION/i.test(l)) continue;
+
+      // Format SFE avec [E] ou [B] à la fin: "1 Designation 3.587.622 1 3.587.622 [E]"
+      let ap = l.match(/^(\d+)\s+(.+?)\s+([\d.,]+(?:\.\d{3})*)\s+(\d+(?:[.,]\d+)?)\s+([\d.,]+(?:\.\d{3})*)\s*\[([A-Z])\]\s*$/);
+      if (ap) {
+        facture.articles.push({ designation: ap[2].trim(), prixUnitaire: parseNum(ap[3]), quantite: parseFloat(ap[4].replace(',','.')), montantTTC: parseNum(ap[5]) });
+        continue;
+      }
+      // Format SFE sans groupe: "1 Designation 3.587.622 1 3.587.622"
+      ap = l.match(/^(\d+)\s+(.+?)\s+([\d.,]+(?:\.\d{3})*)\s+(\d+(?:[.,]\d+)?)\s+([\d.,]+(?:\.\d{3})*)$/);
+      if (ap) {
+        facture.articles.push({ designation: ap[2].trim(), prixUnitaire: parseNum(ap[3]), quantite: parseFloat(ap[4].replace(',','.')), montantTTC: parseNum(ap[5]) });
+        continue;
+      }
+      // Format sans numéro de ligne avec [E]: "Designation 3.587.622 1 3.587.622 [E]"
+      ap = l.match(/^(.+?)\s+([\d.,]+(?:\.\d{3})*)\s+(\d+(?:[.,]\d+)?)\s+([\d.,]+(?:\.\d{3})*)\s*\[([A-Z])\]\s*$/);
+      if (ap && !/^\d+$/.test(ap[1].trim()) && !/Nom|Désignation|Type|Payé/i.test(ap[1])) {
+        facture.articles.push({ designation: ap[1].trim(), prixUnitaire: parseNum(ap[2]), quantite: parseFloat(ap[3].replace(',','.')), montantTTC: parseNum(ap[4]) });
+        continue;
+      }
+      // Format générique: "Designation Prix Qté Total"
+      ap = l.match(/^(.+?)\s+([\d\s.,]+)\s+(\d+(?:[.,]\d+)?)\s+([\d\s.,]+)$/);
+      if (ap && !/^\d+$/.test(ap[1].trim()) && !/Nom|Désignation|Type|Payé|Groupe|Prix/i.test(ap[1])) {
+        facture.articles.push({ designation: ap[1].trim(), prixUnitaire: parseNum(ap[2]), quantite: parseFloat(ap[3].replace(',','.')), montantTTC: parseNum(ap[4]) });
+      }
+    }
+  }
+
+  // === TOTAL TTC ===
+  // D'abord chercher un total formaté normalement
+  m = t.match(/Total\s*TTC\s*:?\s*([\d\s.,]+)/i);
+  if (m) facture.totalTTC = parseNum(m[1]);
+  // Puis chercher "T o t a l : 3 . 5 8 7 . 6 2 2" (espaces entre chaque char)
+  if (!facture.totalTTC) {
+    m = t.match(/T\s*o\s*t\s*a\s*l\s*:?\s*([\d\s.,]+)/i);
+    if (m) facture.totalTTC = parseNum(m[1]);
+  }
+  if (!facture.totalTTC) {
+    m = t.match(/Total\s*:?\s*([\d\s.,]+)\s*(?:XOF|FCFA|F\s*CFA)?/i);
+    if (m) facture.totalTTC = parseNum(m[1]);
+  }
+  // Fallback: somme des articles
+  if (!facture.totalTTC && facture.articles.length) {
+    facture.totalTTC = facture.articles.reduce((s, a) => s + a.montantTTC, 0);
+  }
+
+  // === PAIEMENTS ===
+  const payBlock = t.match(/(?:PAIEMENT|RÉPARTITION|REPARTITION|Mode\s*de\s*paiement)[\s\S]*?(?=Arrêt|ARRÊT|ÉLÉMENTS|ELEMENTS|NIM|Code\s*MECeF|$)/i);
+  if (payBlock) {
+    const pl = payBlock[0].split('\n');
+    pl.forEach(l => {
+      const pm = l.match(/(ESP[ÈE]CES?|CARTE|VIREMENT|CH[ÈE]QUES?|CHEQUES?|MOBILE[\s_-]*MONEY|AUTRES?|COMPTANT)\s+([\d\s.,]+)/i);
+      if (pm) facture.paiements.push({ type: pm[1].trim().toUpperCase(), montant: parseNum(pm[2]) });
+    });
+  }
+  if (!facture.paiements.length && facture.totalTTC) {
+    facture.paiements.push({ type: 'ESPECES', montant: facture.totalTTC });
+  }
+
+  // === ARRÊTÉ EN LETTRES ===
+  m = t.match(/Arrêt[ée]e?\s+la\s+pr[ée]sente\s+facture\s+[àa]\s+la\s+somme\s+de\s+(.+?)(?:\s+francs?\s+CFA\s+TTC|\s+TTC|\.(?:\s|\n)|$)/i);
+  if (m) facture.arreteEnLettres = m[1].trim();
+
+  // === AIB (optionnel) ===
+  m = t.match(/AIB[\s\S]*?(?:FPID|Réf|Cat[ée]gorie|Montant)[\s\S]*?(?=ÉLÉMENTS|ELEMENTS|Arrêt|NIM|Code\s*MECeF|$)/i);
+  if (m) {
+    facture.aib = { fpid: '', refQuittance: '', categorie: '', montant: 0 };
+    const ab = m[0];
+    let am;
+    am = ab.match(/FPID\s*:?\s*(\S+)/i); if (am) facture.aib.fpid = am[1];
+    am = ab.match(/(?:Réf|Ref)\s*(?:Quittance)?\s*:?\s*(\S+)/i); if (am) facture.aib.refQuittance = am[1];
+    am = ab.match(/Cat[ée]gorie\s*:?\s*(\S+)/i); if (am) facture.aib.categorie = am[1];
+    am = ab.match(/Montant\s*(?:AIB)?\s*:?\s*([\d\s.,]+)/i); if (am) facture.aib.montant = parseNum(am[1]);
+  }
+
+  // === MECeF ===
+  // Format avec tirets: XXXX-XXXX-XXXX-XXXX-XXXX-XXXX
+  m = t.match(/([A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4})/);
+  if (m) {
+    facture.mecef.code = m[1];
+  } else {
+    // Format continu après "Code MECeF/DGI": un bloc de 20+ chars alphanumériques
+    m = t.match(/Code\s*MECeF\s*\/?\s*DGI\s*:?\s*\n?\s*([A-Z0-9]{16,})/i);
+    if (m) facture.mecef.code = m[1];
+    if (!facture.mecef.code) {
+      // Chercher un bloc de 20+ chars alphanumériques sur sa propre ligne near "MECeF"
+      m = t.match(/(?:MECeF|DGI|SÉCURITÉ|SECURITE)[\s\S]{0,200}?\n([A-Z0-9]{16,})\n/i);
+      if (m) facture.mecef.code = m[1];
+    }
+  }
+
+  // NIM
+  m = t.match(/NIM\s*:?\s*([A-Z]{2}\d+)/i);
+  if (m) facture.mecef.nim = m[1];
+  if (!facture.mecef.nim) {
+    m = t.match(/NIM\s*:?\s*([A-Z0-9]+)/i);
+    if (m) facture.mecef.nim = m[1];
+  }
+
+  // Compteurs
+  m = t.match(/Compteurs?\s*:?\s*([\d]+\s*\/\s*[\d]+\s*FV)/i);
+  if (m) facture.mecef.compteurs = m[1];
+
+  // Heure
+  m = t.match(/(?:MECeF\s*)?Heure\s*:?\s*(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2})/i);
+  if (m) facture.mecef.heure = m[1];
+  if (!facture.mecef.heure) {
+    // Chercher timestamp après la date de facture
+    const dates = [...t.matchAll(/(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2})/g)];
+    if (dates.length) facture.mecef.heure = dates[dates.length - 1][1];
+  }
+
+  console.log('✅ Facture parsée:', JSON.parse(JSON.stringify(facture)));
+}
+
+/* ===== RESET ===== */
+function resetFacture() {
+  facture = null;
+  document.getElementById('fileStatus').style.display = 'none';
+  document.getElementById('btnReset').style.display = 'none';
+  document.getElementById('btnExport').disabled = true;
+  document.getElementById('btnPrint').disabled = true;
+  pdfInput.value = '';
+  renderFacture();
+}
+
+/* ===== RENDER FACTURE ===== */
+function renderFacture() {
+  const pv = document.getElementById('facture-preview');
+  if (!facture) {
+    pv.innerHTML = '<div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg><p>Uploadez une facture MECeF pour<br>générer l\'aperçu professionnel</p></div>';
+    return;
+  }
+  const e = entreprise;
+  const f = facture;
+
+  let h = '';
+
+  /* --- HEADER --- */
+  h += '<div class="fv-header"><div class="logo-side">';
+  if (e.logo) h += '<img src="' + e.logo + '" alt="Logo">';
+  h += '<div><div class="company-name">' + esc(e.nom || f.vendeur || 'ENTREPRISE') + '</div>';
+  if (e.slogan) h += '<div class="company-slogan">' + esc(e.slogan) + '</div>';
+  h += '</div></div><div class="legal-info">';
+  if (e.rc) h += '<div><strong>RC:</strong> ' + esc(e.rc) + '</div>';
+  if (e.ifu) h += '<div><strong>IFU:</strong> ' + esc(e.ifu) + '</div>';
+  h += '</div></div>';
+
+  /* --- TITRE --- */
+  let numAffichage = esc(f.numero);
+  if (f.numero && f.mecef && f.mecef.compteurs) {
+    const compteurJour = f.mecef.compteurs.split('/')[0].trim();
+    if (compteurJour && !f.numero.endsWith('-' + compteurJour) && !f.numero.endsWith('- ' + compteurJour) && !f.numero.endsWith(compteurJour)) {
+      numAffichage += ' -' + compteurJour;
+    }
+  }
+
+  h += '<div class="fv-title">Facture de Vente</div>';
+  h += '<div class="fv-meta"><div><strong>Facture N° :</strong> ' + numAffichage + '<br><strong>Vendeur:</strong> ' + esc(f.vendeur) + '</div><div style="text-align:right"><strong>Date:</strong> ' + esc(f.date) + '</div></div>';
+
+  /* --- PARTIES VENDEUR / CLIENT --- */
+  h += '<div class="fv-parties"><div><h3>Vendeur</h3>';
+  h += '<div>' + esc(e.nom || f.vendeur) + '</div>';
+  if (e.adresse) h += '<div>' + esc(e.adresse) + '</div>';
+  if (e.tel1) h += '<div>Tél: ' + esc(e.tel1) + (e.tel2 ? ' / ' + esc(e.tel2) : '') + '</div>';
+  if (e.email) h += '<div>' + esc(e.email) + '</div>';
+  if (e.site) h += '<div>' + esc(e.site) + '</div>';
+  h += '</div><div><h3>Client</h3>';
+  h += '<div><strong>Nom:</strong> ' + esc(f.client.nom) + '</div>';
+  if (f.client.ifu) h += '<div><strong>IFU:</strong> ' + esc(f.client.ifu) + '</div>';
+  if (f.client.adresse) h += '<div><strong>Adresse:</strong> ' + esc(f.client.adresse) + '</div>';
+  if (f.client.contact) h += '<div><strong>Contact:</strong> ' + esc(f.client.contact) + '</div>';
+  h += '</div></div>';
+
+  /* --- TABLEAU ARTICLES --- */
+  h += '<div class="fv-section-title">Articles</div>';
+  h += '<table><thead><tr><th style="width:30px">#</th><th>Désignation</th><th style="width:80px">Prix Unit.</th><th style="width:40px">Qté</th><th style="width:80px">Total</th></tr></thead><tbody>';
+  f.articles.forEach((a, i) => {
+    h += '<tr><td>' + (i+1) + '</td><td>' + esc(a.designation) + '</td><td class="num">' + fmtShort(a.prixUnitaire) + '</td><td class="num">' + a.quantite + '</td><td class="num">' + fmtShort(a.montantTTC) + '</td></tr>';
+  });
+  h += '</tbody></table>';
+
+  /* --- VENTILATION IMPÔTS --- */
+  h += '<div class="fv-section-title">Ventilation Impôts</div>';
+  h += '<table><thead><tr><th>Groupe</th><th>Total</th><th>Imposable</th><th>Impôt</th></tr></thead><tbody>';
+  h += '<tr><td>E - TPS</td><td class="num">' + fmtShort(f.totalTTC) + '</td><td class="num">—</td><td class="num">—</td></tr>';
+  h += '</tbody></table>';
+
+  /* --- TOTAL TTC --- */
+  h += '<div class="fv-total">Total TTC : ' + fmt(f.totalTTC) + '</div>';
+
+  /* --- PAIEMENTS --- */
+  h += '<div class="fv-section-title">Répartition des Paiements</div>';
+  h += '<table><thead><tr><th>Type</th><th>Montant payé</th></tr></thead><tbody>';
+  f.paiements.forEach(p => {
+    h += '<tr><td>' + esc(p.type) + '</td><td class="num">' + fmt(p.montant) + '</td></tr>';
+  });
+  h += '</tbody></table>';
+
+  /* --- ARRÊTÉ --- */
+  if (f.arreteEnLettres) {
+    h += '<div class="fv-arrete">Arrêté la présente facture à la somme de <strong>' + esc(f.arreteEnLettres) + '</strong> TTC.</div>';
+  }
+
+  /* --- NOTE AIB (masqué si null) --- */
+  if (f.aib) {
+    h += '<div class="fv-aib"><strong>Note AIB :</strong>';
+    if (f.aib.fpid) h += ' FPID: ' + esc(f.aib.fpid);
+    if (f.aib.refQuittance) h += ' | Réf Quittance: ' + esc(f.aib.refQuittance);
+    if (f.aib.categorie) h += ' | Catégorie: ' + esc(f.aib.categorie);
+    if (f.aib.montant) h += ' | Montant: ' + fmt(f.aib.montant);
+    h += '</div>';
+  }
+
+  /* --- BLOC SÉCURITÉ MECeF — IMAGE EXTRAITE DU PDF --- */
+  if (f.mecefCapture) {
+    h += '<div style="margin-top:16px;overflow:hidden">';
+    h += '<img src="' + f.mecefCapture + '" style="width:100%;display:block;object-fit:contain" alt="Bloc MECeF" />';
+    h += '</div>';
+  } else {
+    h += '<div style="margin-top:16px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;height:80px;display:flex;align-items:center;justify-content:center">';
+    h += '<span style="font-style:italic;color:#6b7280;font-size:11px">Le bloc MECeF sera extrait automatiquement depuis votre PDF</span>';
+    h += '</div>';
+  }
+
+  /* --- FOOTER --- */
+  h += '<div class="fv-footer">';
+  const footParts = [];
+  if (e.adresse) footParts.push(esc(e.adresse));
+  if (e.tel1) footParts.push('Tél: ' + esc(e.tel1));
+  if (e.email) footParts.push(esc(e.email));
+  if (e.site) footParts.push(esc(e.site));
+  h += footParts.join(' | ') + '</div>';
+
+  pv.innerHTML = h;
+}
+
+/* ===== EXPORT PDF ===== */
+async function exportPDF() {
+  const btn = document.getElementById('btnExport');
+  btn.disabled = true;
+  btn.textContent = '⏳ Génération en cours...';
+  try {
+    const el = document.getElementById('facture-preview');
+    // Récupérer le nom de la facture en filtrant tout caractère invalide pour un nom de fichier
+    const safeName = (facture && facture.numero) ? facture.numero.replace(/[^a-zA-Z0-9_\-]/g, '_') : 'export';
+    
+    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+    const imgData = canvas.toDataURL('image/png', 1.0);
+    
+    // Calcul de la hauteur dynamique pour ne pas couper le footer
+    const w = 210; // Largeur A4 en mm
+    const h = (canvas.height * w) / canvas.width;
+    const finalH = Math.max(297, h); // Au moins A4 (297mm) ou plus si le contenu est long
+
+    const pdf = new jspdf.jsPDF({ orientation: 'portrait', unit: 'mm', format: [w, finalH] });
+    pdf.addImage(imgData, 'PNG', 0, 0, w, h);
+    
+    const fileName = 'Facture_Pro_' + safeName + '.pdf';
+    pdf.save(fileName);
+    
+    showToast('✅ PDF exporté avec succès !');
+  } catch (err) {
+    console.error('Export error:', err);
+    showToast('❌ Erreur lors de l\'export PDF');
+  }
+  btn.disabled = false;
+  btn.textContent = '⬇ Télécharger PDF';
+}
+
+/* ===== INIT ===== */
+loadEntreprise();
+
+/* ===== AUTO-TEST (via ?test=1) ===== */
+if (new URLSearchParams(window.location.search).get('test') === '1') {
+  facture = {
+    numero: 'EM014573298',
+    date: '30/03/2026',
+    vendeur: 'SFE en ligne',
+    client: { nom: 'LE LABEL COTON DU BENIN SA', ifu: '3200700051010', adresse: 'SEPOUNGA TANGUIETA', contact: '' },
+    articles: [{ designation: 'Transport de coton graine', prixUnitaire: 3587622, quantite: 1, montantTTC: 3587622 }],
+    totalTTC: 3587622,
+    paiements: [{ type: 'CHEQUES', montant: 3587622 }],
+    arreteEnLettres: 'trois million cinq cent quatrevingtsept mille six cent vingtdeux',
+    aib: null,
+    mecef: { code: 'Z4PSCM2GJLGGKMC5MND6GXZT', nim: 'EM01457329', compteurs: '8/9 FV', heure: '30/03/2026 16:48:38' },
+    mecefCapture: null
+  };
+  document.getElementById('btnExport').disabled = false;
+  document.getElementById('btnPrint').disabled = false;
+  document.getElementById('fileStatus').style.display = 'flex';
+  document.getElementById('fileStatus').className = 'file-status success';
+  document.getElementById('fileStatus').innerHTML = '✅ <strong>Facture_EM01457329-8.pdf</strong> — Données extraites (mode test)';
+  document.getElementById('btnReset').style.display = 'block';
+  renderFacture();
+}
+</script>
+</body>
+</html>
